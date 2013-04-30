@@ -16,7 +16,7 @@ foreach ($tbody_doms as $tbody_dom) {
         $text_committees = trim($doc->saveHTML($tr_dom->getElementsByTagName('td')->item(1)));
         $party1 = trim($tr_dom->getElementsByTagName('td')->item(2)->nodeValue);
         $party2 = trim($tr_dom->getElementsByTagName('td')->item(3)->nodeValue);
-        $area = trim($tr_dom->getElementsByTagName('td')->item(4)->nodeValue);
+        $area   = trim($tr_dom->getElementsByTagName('td')->item(4)->nodeValue);
         $contact = trim($tr_dom->getElementsByTagName('td')->item(5)->nodeValue);
         $committees = array();
         foreach (explode('<br>', $text_committees) as $text_committee) {
@@ -24,6 +24,10 @@ foreach ($tbody_doms as $tbody_dom) {
                 $committees[] = trim(strip_tags($text_committee));
             }
         }
+
+        // truncate 到職日期
+        $area = trim(array_splice(explode("\n", $area),0,1));
+
         $person->{'姓名'} = $name;
         $person->{'委員會'} = $committees;
         $person->{'黨籍'} = $party1;
