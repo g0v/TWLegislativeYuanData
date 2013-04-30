@@ -55,7 +55,15 @@ class Crawler
         @$doc->loadHTML($full_body);
 
         $persons = [];
+        $entries = [];
+
+        foreach ($this->findDomByCondition($doc, 'li', 'class', 'leg03_dis_name') as $td_dom) {
+            $entries[] = $td_dom;
+        }
         foreach ($this->findDomByCondition($doc, 'td', 'class', 'leg03_news_search_03') as $td_dom) {
+            $entries[] = $td_dom;
+        }
+        foreach ($entries as $td_dom) {
             $person = new StdClass;
 
             $a_dom = $td_dom->getElementsByTagName('a')->item(0);
@@ -110,6 +118,7 @@ class Crawler
                 3 => '經歷',
                 4 => '傳真',
                 5 => '通訊處',
+                6 => '備註',
             );
             $skip_map = array('簡介');
 
