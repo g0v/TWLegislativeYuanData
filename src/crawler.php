@@ -1,7 +1,70 @@
 <?php
 
+
 class Crawler
 {
+    public $propertyIndex = 0;
+    public $sectionNames   = array('委員會','學歷','電話','經歷','傳真','通訊處','links','到職日期');
+    public $propertyNames = array('姓名', '英文姓名', '性別', '黨籍', '黨團', '選區', '生日');
+
+
+    public function isPropertyName($p) {
+        list($n) = preg_split('#：#', $p);
+        return in_array($n,$this->propertyNames);
+    }
+
+    public function hasSubItems($p) {
+        return preg_match('#：#', $p);
+    }
+
+    public function parseLabel($p) {
+        list($n) = preg_split('#：#', $p);
+        return $n;
+    }
+
+    public function isSectionName($p) {
+        list($n) = preg_split('#：#', $p);
+        return in_array($n,$this->sectionNames);
+    }
+
+    public function getSubList($parts) {
+
+    }
+
+
+    public function getSubPropertiesFrom($parts) {
+        $properties = array();
+        if ( ! isset($parts[$this->propertyIndex]) ) {
+            return $properties;
+        }
+        while( isset($parts[$this->propertyIndex+1]) ) {
+            // recursively take the subitems
+            if ( $this->hasSubItems($parts[$this->propertyIndex+1] ) ) {
+                if ( $this->isSectionName($parts[$this->propertyIndex+1]) 
+                    || $this->isPropertyName($parts[$this->propertyIndex+1]) )
+                    return $properties;
+                // handle
+                $this->propertyIndex++;
+                $n = $this->parseLabel( $parts[$this->propertyIndex] );
+                $properties[$n] = $this->getSubPropertiesFrom($parts);
+            } else {
+
+                // take all list and return
+                while(
+                    isset($parts[$this->propertyIndex+1])
+                    && ! $this->hasSubItems($parts[$this->propertyIndex+1]) ) 
+                {
+                    $this->propertyIndex++;
+                    $properties[] = $parts[$this->propertyIndex];
+                }
+                return $properties;
+            }
+        }
+        return $properties;
+    }
+
+
+
     public function innerHTML($doc, $el)
     {
         // from http://php.net/manual/en/book.dom.php
@@ -72,16 +135,57 @@ class Crawler
             $ul_dom = $this->findDomByCondition($persondoc, 'ul', 'style', 'list-style-position:outside;')[0];
 
             $list = array('姓名', '英文姓名', '性別', '黨籍', '黨團', '選區', '生日');
+
+            $text = $ul_dom->textContent;
+            $parts = preg_split('#\r\n#', $text);
+            $parts = array_values(array_filter(array_map(function($part) { return trim($part); }, $parts),
+                    function($part) { return $part ? true : false; }));
+
+            $properties = array();
+            for ( $this->propertyIndex = 0 ; $this->propertyIndex < count($parts) ; $this->propertyIndex++ ) {
+                if (! isset($parts[$this->propertyIndex]))
+                    continue;
+
+                $part = $parts[$this->propertyIndex];
+                if ( preg_match('#：#', $part ) ) {
+                    list($key, $value) = preg_split('#：#', $part);
+
+                    // for normal property
+                    if ( in_array($key, $this->propertyNames) ) {
+                        $properties[ $key ] = trim($value);
+                    }
+                    elseif ( in_array($key, $this->sectionNames) ) {
+                        $properties[ $key ] = $this->getSubPropertiesFrom($parts);
+                    }
+                    elseif ( strlen($value) == 0 ) {
+                        // handle something like "到職日期"
+                        // for property key without value (we should take the next token)
+                        $properties[ $key ] = $parts[$this->propertyIndex++];
+                    }
+                }
+            }
+            # var_dump( $parts ); 
+            var_dump( $properties ); 
+            sleep(1);
+            continue;
+
             foreach ($ul_dom->getElementsByTagName('li') as $li_dom) {
+                var_dump( $li_dom->nodeValue );
                 list($key, $value) = explode('：', trim($li_dom->nodeValue), 2);
 
                 if (in_array($key, $list)) {
                     $person->{$key} = trim($value);
-                } elseif ('委員會' == $key) {
+                }
+                if ('委員會' == $key) {
                     $committees = array();
-                    foreach (explode("<br>", $this->innerHTML($persondoc, $li_dom)) as $body) {
+                    foreach ( preg_split("#<br/?>#", $this->innerHTML($persondoc, $li_dom)) as $body) {
+                        $body = trim($body);
+                        if ( strlen($body) == 0 )
+                            continue;
+
                         list($key, $value) = explode('：', $body);
                         if (trim($key) == '委員會') {
+
                         } elseif (trim($key) == '到職日期') {
                             $person->{'到職日期'} = trim($value);
                         } else {
@@ -158,7 +262,7 @@ class Crawler
     }
 }
 
-if ($_SERVER['argv'][1]) {
+if (isset($_SERVER['argv'][1])) {
     $url = $_SERVER['argv'][1];
 } else {
     $url = 'http://www.ly.gov.tw/03_leg/0301_main/legList.action';
